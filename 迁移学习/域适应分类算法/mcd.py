@@ -15,7 +15,7 @@ import torch.nn.functional as F
 
 sys.path.append('../../..')
 from utils.logger import CompleteLogger
-from dataset.dataloader import  get_digits_dataloader, get_dataloader
+from dataset.dataloader import get_digits_dataloader, get_dataloader
 from model.feature_extractor import resnet50
 from model.classifier_head import ImageClassifierHead
 from utils.meter import AverageMeter, ProgressMeter
@@ -24,11 +24,10 @@ from utils.accuracy import accuracy
 from utils.metric import ConfusionMatrix, collect_feature, entropy
 from utils import tsne, a_distance
 
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def main(args: argparse.Namespace):
 
+def main(args: argparse.Namespace):
     logger = CompleteLogger(args.log, args.phase)
     if args.seed is not None:
         random.seed(args.seed)
@@ -46,8 +45,8 @@ def main(args: argparse.Namespace):
     # train_target_loader, train_target_iter = get_digits_dataloader(args, split='test', phase='train', domain='target')
     # val_loader, val_iter = get_digits_dataloader(args, split='test', phase='val', domain='target')
     # test_loader, test_iter = val_loader, val_iter
-    train_source_loader, train_source_iter = get_dataloader(args,  phase='train', domain='source')
-    train_target_loader, train_target_iter = get_dataloader(args,  phase='train', domain='target')
+    train_source_loader, train_source_iter = get_dataloader(args, phase='train', domain='source')
+    train_target_loader, train_target_iter = get_dataloader(args, phase='train', domain='target')
     val_loader, val_iter = get_dataloader(args, phase='val', domain='target')
     test_loader, test_iter = val_loader, val_iter
     ## 创建模型
@@ -113,8 +112,8 @@ def main(args: argparse.Namespace):
     print("test_acc1 = {:3.1f}".format(max(results)))
     logger.close()
 
-def train(train_source_iter, train_target_iter, G, F1, F2, optimizer_g, optimizer_f, epoch, args):
 
+def train(train_source_iter, train_target_iter, G, F1, F2, optimizer_g, optimizer_f, epoch, args):
     batch_time = AverageMeter('Time', ':3.1f')
     data_time = AverageMeter('Data', ':3.1f')
     losses = AverageMeter('Loss', ':3.2f')
@@ -122,8 +121,8 @@ def train(train_source_iter, train_target_iter, G, F1, F2, optimizer_g, optimize
     cls_accs = AverageMeter('Cls Acc', ':3.1f')
     tgt_accs = AverageMeter('Tgt Acc', ':3.1f')
     progress = ProgressMeter(args.iters_per_epoch,
-        [batch_time, data_time, losses, trans_losses, cls_accs, tgt_accs],
-        prefix="Epoch: [{}]".format(epoch))
+                             [batch_time, data_time, losses, trans_losses, cls_accs, tgt_accs],
+                             prefix="Epoch: [{}]".format(epoch))
     G.train()
     F1.train()
     F2.train()
@@ -137,7 +136,7 @@ def train(train_source_iter, train_target_iter, G, F1, F2, optimizer_g, optimize
         labels_t = labels_t.to(device)
         x = torch.cat((x_s, x_t), dim=0)
         assert x.requires_grad is False
-        data_time.update(time.time()- end)
+        data_time.update(time.time() - end)
         ###Step A train all networks to minimize loss on source domain,用source data训练两个分类器以及特征提取器
         optimizer_g.zero_grad()
         optimizer_f.zero_grad()
@@ -148,7 +147,8 @@ def train(train_source_iter, train_target_iter, G, F1, F2, optimizer_g, optimize
         y2_s, y2_t = y_2.chunk(2, dim=0)
         y1_t, y2_t = F.softmax(y1_t, dim=1), F.softmax(y2_t, dim=1)
         ### 关键部分
-        loss = F.cross_entropy(y1_s, labels_s) + F.cross_entropy(y2_s, labels_s) +  0.01 * (entropy(y1_t) + entropy(y2_t))
+        loss = F.cross_entropy(y1_s, labels_s) + F.cross_entropy(y2_s, labels_s) + 0.01 * (
+                    entropy(y1_t) + entropy(y2_t))
         loss.backward()
         optimizer_g.step()
         optimizer_f.step()
@@ -162,12 +162,13 @@ def train(train_source_iter, train_target_iter, G, F1, F2, optimizer_g, optimize
         y2_s, y2_t = y_2.chunk(2, dim=0)
         y1_t, y2_t = F.softmax(y1_t, dim=1), F.softmax(y2_t, dim=1)
         ### 关键部分
-        loss = F.cross_entropy(y1_s, labels_s) + F.cross_entropy(y2_s, labels_s) + 0.01 * (entropy(y1_t) + entropy(y2_t)) - \
-               classifier_discrepancy(y1_t, y2_t)*args.trade_off
+        loss = F.cross_entropy(y1_s, labels_s) + F.cross_entropy(y2_s, labels_s) + 0.01 * (
+                    entropy(y1_t) + entropy(y2_t)) - \
+               classifier_discrepancy(y1_t, y2_t) * args.trade_off
         loss.backward()
         optimizer_f.step()
         # Step C train genrator to minimize discrepancy 最小化分类器差异
-        for k in range(args.num_k): #训练G时，多迭代几次
+        for k in range(args.num_k):  # 训练G时，多迭代几次
             optimizer_g.zero_grad()
             g = G(x)
             y_1 = F1(g)
@@ -178,7 +179,7 @@ def train(train_source_iter, train_target_iter, G, F1, F2, optimizer_g, optimize
             mcd_loss = classifier_discrepancy(y1_t, y2_t) * args.trade_off
             mcd_loss.backward()
             optimizer_g.step()
-       ### 更新各个指标
+        ### 更新各个指标
         cls_acc = accuracy(y1_s, labels_s)[0]
         tgt_acc = accuracy(y1_t, labels_t)[0]
 
@@ -194,14 +195,14 @@ def train(train_source_iter, train_target_iter, G, F1, F2, optimizer_g, optimize
         if i % args.print_freq == 0:
             progress.display(i)
 
-def validate(data_loader, G, F1, F2, args):
 
+def validate(data_loader, G, F1, F2, args):
     batch_time = AverageMeter('Time', ':6.3f')
     top1_1 = AverageMeter('Acc_1', ':6.2f')
     top1_2 = AverageMeter('Acc_2', ':6.2f')
     progress = ProgressMeter(len(data_loader),
-        [batch_time, top1_1, top1_2],
-        prefix='Test: ')
+                             [batch_time, top1_1, top1_2],
+                             prefix='Test: ')
     G.eval()
     F1.eval()
     F2.eval()
@@ -287,4 +288,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
     main(args)
-
